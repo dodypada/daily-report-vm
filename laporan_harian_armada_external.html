@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Laporan Harian Armada External</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --bg:#EDF1F4; --panel:#FFFFFF; --ink:#1C2B3A; --muted:#5E6E7E; --line:#D7DEE5;
+  --steel:#24577F; --steel-soft:#E4ECF4; --bar:#1D5E7A; --track:#DCE4EA;
+  --ok:#1F8A5B; --ok-soft:#E1F3EA; --warn:#B7790A; --warn-soft:#FBF0D9; --bad:#C0392B; --bad-soft:#F9E4E1;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121A22; --panel:#1A2530; --ink:#E4EAF0; --muted:#93A3B3; --line:#2C3A47;
+  --steel:#86B6E3; --steel-soft:#223446; --bar:#5BA7C9; --track:#2C3A47;
+  --ok:#5CC793; --ok-soft:#173226; --warn:#E5B04B; --warn-soft:#352914; --bad:#EE7B70; --bad-soft:#3A1E1B;
+  color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#121A22; --panel:#1A2530; --ink:#E4EAF0; --muted:#93A3B3; --line:#2C3A47;
+  --steel:#86B6E3; --steel-soft:#223446; --bar:#5BA7C9; --track:#2C3A47;
+  --ok:#5CC793; --ok-soft:#173226; --warn:#E5B04B; --warn-soft:#352914; --bad:#EE7B70; --bad-soft:#3A1E1B;
+  color-scheme:dark;}
+*{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Barlow,"Segoe UI",Arial,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 16px 56px}
+h1{font:700 30px/1.1 "Barlow Condensed",Barlow,Arial,sans-serif;margin:0}
+.lead{font:700 26px/1.2 "Barlow Condensed",Barlow,Arial,sans-serif;margin:4px 0 2px}
+h3{font-size:15px;font-weight:600;margin:20px 0 8px}
+.sub{color:var(--muted);font-size:14px;margin:0}
+header.top{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.controls label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:3px}
+select,input[type=date],button{font:inherit;font-size:14px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+button{cursor:pointer;font-weight:600}
+button.primary{background:var(--steel);border-color:var(--steel);color:#fff}
+:focus-visible{outline:2px solid var(--steel);outline-offset:2px}
+.strip{display:grid;grid-template-columns:repeat(3,1fr);margin:22px 0 4px;position:relative}
+.strip::before{content:"";position:absolute;left:16.6%;right:16.6%;top:15px;height:3px;background:var(--line)}
+.stop{text-align:center;position:relative;padding:0 6px}
+.dot{width:32px;height:32px;border-radius:50%;margin:0 auto 6px;display:grid;place-items:center;font:700 13px "Barlow Condensed",sans-serif;background:var(--panel);border:3px solid var(--line);position:relative}
+.stop.otd .dot{border-color:var(--steel);color:var(--steel)}
+.stop.stf .dot{border-color:var(--warn);color:var(--warn)}
+.stop.now .dot{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.stop b{display:block;font-size:15px}.stop span{font-size:13px;color:var(--muted)}
+.status{font-size:13px;color:var(--muted);margin:8px 0 0}.status .e{color:var(--bad)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin-top:18px}
+.sec-no{font-size:13px;font-weight:600;color:var(--steel)}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:16px 0 4px}
+.kpi .v{font:700 40px/1 "Barlow Condensed",sans-serif}
+.kpi .l{font-size:14px;color:var(--muted);margin-top:4px}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.mut{color:var(--muted)}
+.tbl{overflow-x:auto;max-width:100%;border:1px solid var(--line);border-radius:8px;margin-top:12px}
+.tbl.scroll{max-height:380px;overflow-y:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;z-index:1;background:var(--steel-soft);font-weight:600;font-size:13px}
+th.s{cursor:pointer}th.s::after{content:" ↕";color:var(--muted);font-weight:400}
+td.l,th.l{text-align:left}
+td.n{font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+tr.tot td{font-weight:700;border-top:2px solid var(--ink);background:var(--panel)}
+.barc{display:inline-flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums}
+.bar{width:72px;height:6px;background:var(--track);border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--bar)}
+.pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600}
+.pill.ok{background:var(--ok-soft)}.pill.warn{background:var(--warn-soft)}.pill.bad{background:var(--bad-soft)}
+.grade{display:inline-grid;place-items:center;width:26px;height:24px;border-radius:5px;font:700 15px "Barlow Condensed",sans-serif;color:#fff}
+.gA{background:#1F8A5B}.gB{background:#4E9A3F}.gC{background:#B7790A}.gD{background:#C9601E}.gE{background:#C0392B}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid-map{display:grid;grid-template-columns:3fr 2fr;gap:18px;margin-top:8px}
+#map{height:430px;border:1px solid var(--line);border-radius:8px;background:var(--steel-soft)}
+.mk{display:grid;place-items:center;border-radius:50%;color:#fff;font:700 12px Barlow,sans-serif;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.stage{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+.card{border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.card h4{margin:0;font-size:15px}
+.card .big{font:700 34px/1.1 "Barlow Condensed",sans-serif;margin:4px 0 8px}.card .big small{font:500 13px Barlow,sans-serif;color:var(--muted)}
+.row{display:flex;justify-content:space-between;font-size:14px;padding:2px 0}
+.row b{font-variant-numeric:tabular-nums}
+.sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+.find{margin:14px 0 0;padding:0;list-style:none}
+.find li{padding:4px 0 4px 20px;position:relative}
+.find li::before{content:"";position:absolute;left:2px;top:11px;width:9px;height:9px;border-radius:50%;background:var(--bad)}
+.note{font-size:13px;color:var(--muted);margin-top:10px}
+.empty{padding:18px;color:var(--muted);text-align:center}
+.toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:6px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+@media (max-width:900px){.grid2,.grid-map{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.stage{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+@media print{.controls,.status,.toast{display:none}body{background:#fff}section{break-inside:avoid;border-color:#ccc}.tbl.scroll{max-height:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Laporan Harian Armada External</h1>
+      <p class="sub">Stuffing H-1, ketepatan tiba H-2, posisi moda laut, dan performa vendor</p>
+    </div>
+    <div class="controls">
+      <label>Tanggal tarikan<input type="date" id="fDate"></label>
+      <label>Origin site<select id="fSite"><option value="">Semua</option></select></label>
+      <button id="btnRefresh">Muat ulang data</button>
+      <button id="btnTest" title="Bandingkan data 60 hari dengan data penuh">Uji akurasi filter</button>
+      <button id="btnPrint">Cetak / PDF</button>
+      <button id="btnCopy" class="primary">Salin ringkasan</button>
+    </div>
+  </header>
+  <div class="strip" id="strip"></div>
+  <p class="status" id="status">Memuat data dari Google Sheets…</p>
+
+  <section>
+    <div class="sec-no">1. Stuffing H-1</div>
+    <div class="lead" id="s1lead">–</div>
+    <p class="sub" id="s1sub"></p>
+    <div class="tbl" id="s1site"></div>
+    <div class="grid2">
+      <div><h3>Per batch</h3><div class="tbl" id="s1batch"></div></div>
+      <div><h3>SI bermasalah</h3><div class="tbl scroll" id="s1exc"></div></div>
+    </div>
+    <p class="note" id="s1note"></p>
+  </section>
+
+  <section>
+    <div class="sec-no">2. On Time Delivery H-2</div>
+    <div class="lead" id="s2lead">–</div>
+    <div class="kpis" id="s2kpi"></div>
+    <div class="grid-map">
+      <div id="map" role="img" aria-label="Peta tujuan pengiriman dengan target tiba H-2"></div>
+      <div class="tbl scroll" id="s2dest" style="margin-top:0;max-height:430px"></div>
+    </div>
+    <h3>SI terlambat atau belum tiba</h3>
+    <div class="tbl scroll" id="s2exc"></div>
+    <p class="note" id="s2note"></p>
+
+    <h3 style="margin-top:28px;font-size:18px" id="s2bLead">Posisi moda laut</h3>
+    <p class="sub" id="s2bSub"></p>
+    <div class="stage" id="s2bStage"></div>
+    <ul class="find" id="s2bFind"></ul>
+    <h3>SI laut dengan aging terlama</h3>
+    <div class="tbl scroll" id="s2bExc"></div>
+  </section>
+
+  <section>
+    <div class="sec-no">3. Performa vendor</div>
+    <div class="lead" id="s3leadL">–</div>
+    <p class="sub" id="s3subL"></p>
+    <div class="tbl" id="s3land"></div>
+    <div class="lead" id="s3leadS" style="margin-top:26px">–</div>
+    <p class="sub" id="s3subS"></p>
+    <div class="tbl" id="s3sea"></div>
+    <p class="note" id="s3note"></p>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ======================= CONFIG ======================= */
+const CONFIG = {
+  // Satu sumber untuk semua bagian: sheet "Data Dashboard Daily VM", tab Data
+  SOURCE_URLS: [
+    'https://docs.google.com/spreadsheets/d/1UNF0G-hmBW9lLVA8UhYiDfnvlLJABqEsfpMUN43hWvQ/gviz/tq?tqx=out:csv&sheet=Data',
+    'https://docs.google.com/spreadsheets/d/1UNF0G-hmBW9lLVA8UhYiDfnvlLJABqEsfpMUN43hWvQ/export?format=csv&gid=0'
+  ],
+  SOURCE_NAME: 'Data Dashboard Daily VM (sheet Data)',
+  // Ambil hanya 60 hari terakhir (filter dibaca di server Google, read-only). SI yang belum Delivered selalu ikut.
+  WINDOW_DAYS: 60,
+  QUERY_BASE: 'https://docs.google.com/spreadsheets/d/1UNF0G-hmBW9lLVA8UhYiDfnvlLJABqEsfpMUN43hWvQ/gviz/tq?tqx=out:csv&sheet=Data&headers=1',
+  COL: { REQ: 'I', MODA: 'H', POS: 'R' },       // huruf kolom di sheet: Req Stuffing, Moda, Position
+  MODAS: ['LAND','SEA'],                        // LCL tidak dihitung
+  TARGET: { ota: 85, otf: 90, otd: 90 },
+  WEIGHT: { otf: 40, ota: 30, otd: 30 },
+  GRADES: [[95,'A'],[90,'B'],[80,'C'],[75,'D'],[0,'E']],
+  NOSHOW_AS_MISS: true,                         // SI tanpa check-in = MIS OTA & MIS Fulfill
+  SEA: { POO_MAX: 4, YARD_MAX: 3 },             // batas normal (hari) di Port of Origin dan Yard POD
+  SITE_ORDER: ['CIKANDE','HCI CIKUPA','HCI JABABEKA','AHI JABABEKA','IND JABABEKA','HCI SIDOARJO','AHI SIDOARJO']
+};
+const COORD = {"aceh":[5.55,95.32],"ambon":[-3.70,128.18],"brebes":[-6.87,109.04],"bali":[-8.65,115.22],"denpasar":[-8.65,115.22],"balikpapan":[-1.27,116.83],"bandung":[-6.91,107.61],"banjarbaru":[-3.44,114.83],"banjarmasin":[-3.32,114.59],"banten":[-6.12,106.15],"banyumas":[-7.51,109.29],"banyuwangi":[-8.22,114.37],"batam":[1.08,104.03],"batulicin":[-3.45,116.00],"baturaja":[-4.13,104.17],"bau bau":[-5.47,122.62],"baubau":[-5.47,122.62],"bekasi":[-6.24,106.99],"bengkulu":[-3.80,102.27],"binjai":[3.60,98.49],"bitung":[1.44,125.19],"bogor":[-6.60,106.80],"bojonegoro":[-7.15,111.88],"bontang":[0.13,117.50],"boyolali":[-7.53,110.60],"bukit tinggi":[-0.31,100.37],"cengkareng":[-6.15,106.73],"cianjur":[-6.82,107.14],"cikarang":[-6.31,107.15],"cikupa":[-6.23,106.51],"cilacap":[-7.73,109.01],"cilegon":[-6.02,106.05],"cimahi":[-6.87,107.54],"cirebon":[-6.73,108.55],"deli serdang":[3.42,98.70],"demak":[-6.89,110.64],"depok":[-6.40,106.82],"dumai":[1.67,101.45],"garut":[-7.21,107.90],"gorontalo":[0.54,123.06],"gresik":[-7.16,112.65],"indramayu":[-6.33,108.32],"jakarta":[-6.20,106.85],"jambi":[-1.61,103.61],"jatinangor":[-6.93,107.77],"jaya pura":[-2.53,140.72],"jayapura":[-2.53,140.72],"jember":[-8.17,113.70],"jepara":[-6.59,110.67],"jogja":[-7.80,110.36],"yogyakarta":[-7.80,110.36],"kalimantan":[-1.68,113.38],"kediri":[-7.82,112.01],"kendal-serang":[-6.92,110.20],"kendal":[-6.92,110.20],"kendari":[-3.99,122.51],"ketapang":[-1.85,109.97],"klaten":[-7.71,110.61],"kolaka":[-4.05,121.59],"kotamobagu":[0.73,124.32],"kudus":[-6.80,110.84],"kuningan":[-6.98,108.48],"kupang":[-10.18,123.60],"lahat":[-3.79,103.54],"lampung":[-5.43,105.26],"lombok":[-8.58,116.12],"mataram":[-8.58,116.12],"lubuk linggau":[-3.30,102.86],"madiun":[-7.63,111.52],"magelang":[-7.47,110.22],"makassar":[-5.15,119.43],"malang":[-7.98,112.63],"mamuju":[-2.68,118.89],"manado":[1.47,124.84],"medan":[3.59,98.67],"mempawah":[0.36,108.96],"mojokerto":[-7.47,112.43],"padang":[-0.95,100.35],"palangkaraya":[-2.21,113.92],"palembang":[-2.98,104.76],"palopo":[-2.99,120.20],"palu":[-0.90,119.87],"pandaan":[-7.65,112.69],"pangkal pinang":[-2.13,106.12],"pangkalan bun":[-2.68,111.63],"pare-pare":[-4.01,119.62],"parepare":[-4.01,119.62],"pasuruan":[-7.64,112.91],"pekalongan":[-6.89,109.68],"pekanbaru":[0.51,101.45],"pemalang":[-6.89,109.38],"pontianak":[-0.03,109.33],"prabumulih":[-3.43,104.23],"probolinggo":[-7.75,113.22],"purbalingga":[-7.39,109.36],"purwakarta":[-6.56,107.44],"purwokerto":[-7.42,109.23],"rantauprapat":[2.10,99.83],"samarinda":[-0.50,117.15],"sampit":[-2.53,112.95],"semarang":[-6.97,110.42],"sengkang":[-4.13,120.03],"sentani":[-2.57,140.51],"serang":[-6.12,106.15],"sidoarjo":[-7.45,112.72],"singkawang":[0.91,108.98],"sleman":[-7.72,110.36],"solo":[-7.57,110.82],"surakarta":[-7.57,110.82],"sorong":[-0.88,131.26],"subang":[-6.57,107.76],"sukabumi":[-6.92,106.93],"sukoharjo":[-7.68,110.84],"sumedang":[-6.86,107.92],"surabaya":[-7.26,112.75],"ternate":[0.79,127.38],"tangerang":[-6.18,106.63],"tanjung morawa":[3.52,98.79],"tanjung pinang":[0.92,104.45],"tarakan":[3.30,117.63],"tasikmalaya":[-7.33,108.22],"tegal":[-6.87,109.14],"timika":[-4.55,136.89],"tomohon":[1.32,124.84],"tuban":[-6.90,112.06],"wonogiri":[-7.81,110.93],"berau":[2.15,117.49],"kebumen":[-7.67,109.65],"lamongan":[-7.12,112.42],"mamuju":[-2.68,118.89],"tanjung selor":[2.84,117.37],"merauke":[-8.50,140.40],"manokwari":[-0.86,134.06],"bima":[-8.46,118.73],"ende":[-8.84,121.66],"maumere":[-8.62,122.21],"luwuk":[-0.95,122.79],"bulukumba":[-5.55,120.19],"tual":[-5.63,132.75],"nabire":[-3.36,135.50],"fakfak":[-2.92,132.30],"sumbawa":[-8.50,117.42],"labuan bajo":[-8.50,119.88]};
+/* ====================================================== */
+
+const $=id=>document.getElementById(id);
+const MON={jan:0,feb:1,mar:2,apr:3,may:4,mei:4,jun:5,jul:6,aug:7,agu:7,agt:7,sep:8,oct:9,okt:9,nov:10,dec:11,des:11};
+const DAY=864e5;
+let STF=[],OTD=[],srcMsg=[],LAST={},map=null,mapLayer=null,loadedAt=null;
+
+function parseCSV(t){const R=[];let r=[],f='',q=false;for(let i=0;i<t.length;i++){const c=t[i];
+  if(q){if(c==='"'&&t[i+1]==='"'){f+='"';i++}else if(c==='"')q=false;else f+=c}
+  else if(c==='"')q=true;else if(c===','){r.push(f);f=''}
+  else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;r.push(f);R.push(r);r=[];f=''}else f+=c}
+  if(f!==''||r.length){r.push(f);R.push(r)}return R.filter(x=>x.some(v=>v.trim()!==''))}
+function parseDT(s){if(s==null)return null;s=String(s).trim();if(!s)return null;let m;
+  if(m=s.match(/^(\d{1,2})[\s-]+([A-Za-z]{3,})[\s-]+(\d{2,4})(?:[\sT,]+(\d{1,2})[:.](\d{2}))?/)){const mo=MON[m[2].slice(0,3).toLowerCase()];if(mo===undefined)return null;let y=+m[3];if(y<100)y+=2000;return{d:new Date(y,mo,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0),t:!!m[4]}}
+  if(m=s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?/))return{d:new Date(+m[1],+m[2]-1,+m[3],m[4]?+m[4]:0,m[5]?+m[5]:0),t:!!m[4]};
+  if(m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/))return{d:new Date(+m[3],+m[2]-1,+m[1],m[4]?+m[4]:0,m[5]?+m[5]:0),t:!!m[4]};
+  return null}
+const day0=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate());
+const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const addD=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const dDiff=(a,b)=>Math.round((day0(a)-day0(b))/DAY);
+const fD=d=>d.toLocaleDateString('id-ID',{day:'numeric',month:'short'});
+const fDL=d=>d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+const fDT=p=>p?p.d.toLocaleDateString('id-ID',{day:'2-digit',month:'short'})+(p.t?' '+p.d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}):''):'–';
+const pct=(a,b)=>b?a/b*100:null;
+const fp=v=>v==null?'–':v.toFixed(1).replace('.',',')+'%';
+const cls=(v,t)=>v==null?'mut':v>=t?'ok':v>=t-10?'warn':'bad';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const grade=s=>{if(s==null)return null;for(const[m,g]of CONFIG.GRADES)if(s>=m)return g;return'E'};
+const nrm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+function siteName(site,bu){let s=String(site||'').toUpperCase().replace(/^NDC\s+/,'').replace(/\s+/g,' ').trim();
+  if(s.includes('SIDOARJO'))return(String(bu).toUpperCase()==='HCI'?'HCI':'AHI')+' SIDOARJO';return s||'(KOSONG)'}
+function idxOf(h){const H=h.map(nrm);return(...names)=>{for(const n of names){const i=H.indexOf(nrm(n));if(i>-1)return i}return -1}}
+
+/* ---------- loaders ---------- */
+async function fetchFirst(urls,label){let last;for(const u of urls){try{const r=await fetch(u+(u.includes('?')?'&':'?')+'cb='+Date.now());if(!r.ok)throw new Error('HTTP '+r.status);const rows=parseCSV(await r.text());if(rows.length>1)return rows;throw new Error('data kosong')}catch(e){last=e}}throw new Error(label+': '+(last?last.message:'gagal'))}
+
+function buildStuffing(rows){const ix=idxOf(rows[0]);
+  const I={site:ix('Supply site'),si:ix('No SI'),vendor:ix('Vendor'),type:ix('TYPE'),tujuan:ix('Tujuan'),moda:ix('Moda'),req:ix('Req Stuffing'),batch:ix('Batch'),cin:ix('Checkin'),bu:ix('BU Group','BU'),sOta:ix('SLA OTA'),sOtf:ix('SLA FULFILL')};
+  const g=(r,k)=>I[k]>-1?String(r[I[k]]||'').trim():'';
+  return rows.slice(1).map(r=>{const moda=g(r,'moda').toUpperCase();if(!CONFIG.MODAS.includes(moda))return null;
+    const req=parseDT(g(r,'req'));if(!req||!g(r,'si'))return null;const cin=parseDT(g(r,'cin'));
+    let otf=false,ota=false;if(cin){otf=day0(cin.d)<=day0(req.d);ota=req.t?cin.d<=req.d:otf}
+    const so=g(r,'sOta').toUpperCase(),sf=g(r,'sOtf').toUpperCase();   // kolom resmi sheet diutamakan
+    if(so==='HIT'||so==='MIS')ota=so==='HIT';if(sf==='HIT'||sf==='MIS')otf=sf==='HIT';
+    return{site:siteName(g(r,'site'),g(r,'bu')),si:g(r,'si'),vendor:g(r,'vendor')||'(Kosong)',armada:g(r,'type'),tujuan:g(r,'tujuan'),moda,batch:g(r,'batch')||'-',req,cin,otf,ota,key:ymd(req.d),lateH:cin?(cin.d-req.d)/36e5:null}}).filter(Boolean)}
+
+function buildOTD(rows){const ix=idxOf(rows[0]);
+  const I={site:ix('Supply site'),si:ix('No SI'),bu:ix('BU Group','BU'),agP:ix('Aging POO'),agS:ix('Aging Sailing'),agY:ix('Aging Yard'),vendor:ix('Vendor'),type:ix('TYPE'),tujuan:ix('Tujuan'),moda:ix('Moda'),cout:ix('Checkout'),
+    sla:ix('Target SLA'),act:ix('Actual SLA'),pos:ix('Position'),status:ix('Status Shipment'),otd:ix('SLA OTD'),pel:ix('PELAYARAN'),
+    atd:ix('ATD (PELAYARAN)','ATD'),eta:ix('ETA (PELAYARAN)','ETA'),ata:ix('ATA'),onsite:ix('ONSITE'),unl:ix('UNLOADED')};
+  const g=(r,k)=>I[k]>-1?String(r[I[k]]||'').trim():'';
+  return rows.slice(1).map(r=>{const moda=g(r,'moda').toUpperCase();if(!CONFIG.MODAS.includes(moda)||!g(r,'si'))return null;
+    const sla=parseDT(g(r,'sla')),cout=parseDT(g(r,'cout')),act=parseDT(g(r,'act')),onsite=parseDT(g(r,'onsite'))||parseDT(g(r,'unl'));
+    const pos=g(r,'pos'),status=g(r,'status');
+    const delivered=/\bdelivered\b/i.test(pos)||/close/i.test(status)||!!onsite;   // 'On Delivery' = belum tiba
+    const arr=delivered?(act||onsite):null;
+    let state='notarrived',lateD=null;
+    if(delivered&&sla){if(arr){lateD=dDiff(arr.d,sla.d);state=lateD<=0?'ontime':'late'}else state=/hit/i.test(g(r,'otd'))?'ontime':'late'}
+    const num=k=>{const v=g(r,k).replace(',','.');return v!==''&&isFinite(+v)?+v:null};
+    return{site:siteName(g(r,'site'),g(r,'bu')),si:g(r,'si'),vendor:g(r,'vendor')||'(Kosong)',armada:g(r,'type'),tujuan:g(r,'tujuan')||'(Kosong)',moda,
+      agP:num('agP'),agS:num('agS'),agY:num('agY'),cout,sla,arr,pos,status,pel:g(r,'pel'),atd:parseDT(g(r,'atd')),eta:parseDT(g(r,'eta')),ata:parseDT(g(r,'ata')),delivered,state,lateD,key:sla?ymd(sla.d):''}}).filter(Boolean)}
+
+let loadMode='',loadedFrom=null;
+function anchorDate(){const v=$('fDate').value;const d=v?parseDT(v).d:day0(new Date());const t=day0(new Date());return d<t?d:t}
+function queryUrls(from){const C=CONFIG.COL,iso=ymd(from);
+  const tail=" or "+C.POS+" <> 'Delivered') and upper("+C.MODA+") <> 'LCL'";
+  return["select * where ("+C.REQ+" >= datetime '"+iso+" 00:00:00'"+tail,"select * where ("+C.REQ+" >= date '"+iso+"'"+tail]
+    .map(q=>CONFIG.QUERY_BASE+'&tq='+encodeURIComponent(q))}
+const validRows=rows=>rows.length>1&&rows[0].some(h=>nrm(h)==='no si')&&rows[0].some(h=>nrm(h)==='req stuffing');
+async function fetchWindow(from){
+  for(const u of queryUrls(from)){try{const r=await fetch(u+'&cb='+Date.now());if(!r.ok)continue;const rows=parseCSV(await r.text());if(validRows(rows))return{rows,mode:'60 hari'}}catch(e){}}
+  const rows=await fetchFirst(CONFIG.SOURCE_URLS,CONFIG.SOURCE_NAME);return{rows,mode:'data penuh (filter 60 hari tidak bisa dipakai)'}}
+async function load(){$('status').textContent='Memuat data dari Google Sheets…';srcMsg=[];
+  const from=addD(anchorDate(),-CONFIG.WINDOW_DAYS);
+  try{const res=await fetchWindow(from);STF=buildStuffing(res.rows);OTD=buildOTD(res.rows);loadMode=res.mode;loadedFrom=res.mode==='60 hari'?from:null}
+  catch(e){STF=[];OTD=[];srcMsg.push(e.message)}
+  loadedAt=new Date();buildSiteFilter();render();
+  $('status').innerHTML='Data diperbarui '+loadedAt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+' WIB ('+esc(loadMode)+(loadedFrom?' sejak '+fD(loadedFrom)+' + SI belum Delivered':'')+'): '+STF.length.toLocaleString('id-ID')+' SI stuffing, '+OTD.length.toLocaleString('id-ID')+' SI pengiriman.'+
+    (srcMsg.length?'<br><span class="e">Gagal memuat '+esc(srcMsg.join('; '))+'. Buka halaman lewat https (GitHub Pages) dan pastikan sheet dibagikan "Anyone with the link".</span>':'')}
+function buildSiteFilter(){const s=$('fSite'),cur=s.value;const set=new Set([...STF.map(r=>r.site),...OTD.map(r=>r.site)]);
+  const list=[...set].sort((a,b)=>{const ia=CONFIG.SITE_ORDER.indexOf(a),ib=CONFIG.SITE_ORDER.indexOf(b);return(ia<0?99:ia)-(ib<0?99:ib)||a.localeCompare(b)});
+  s.innerHTML='<option value="">Semua</option>'+list.map(v=>'<option>'+esc(v)+'</option>').join('');s.value=set.has(cur)?cur:''}
+const pass=r=>!$('fSite').value||r.site===$('fSite').value;
+
+/* ---------- render helpers ---------- */
+function group(a,f){const m=new Map();a.forEach(r=>{const k=f(r);if(!m.has(k))m.set(k,[]);m.get(k).push(r)});return m}
+function tbl(id,cols,rows,opt={}){const el=$(id);if(!rows.length){el.innerHTML='<div class="empty">'+(opt.empty||'Tidak ada data.')+'</div>';return}
+  const st=el._sort;if(st){const c=cols[st.i];rows=[...rows].sort((x,y)=>{const a=c.v?c.v(x):0,b=c.v?c.v(y):0;return(a==null?-1e9:a)>(b==null?-1e9:b)?st.d:(a==b?0:-st.d)})}
+  el.innerHTML='<table><thead><tr>'+cols.map((c,i)=>'<th class="'+(c.l?'l ':'')+(c.v?'s':'')+'" data-i="'+i+'">'+c.h+'</th>').join('')+'</tr></thead><tbody>'+
+   rows.map(r=>'<tr>'+cols.map(c=>'<td class="'+(c.l?'l':'n')+'">'+c.f(r)+'</td>').join('')+'</tr>').join('')+(opt.total?'<tr class="tot">'+cols.map(c=>'<td class="'+(c.l?'l':'n')+'">'+(c.t?c.t(opt.total):'')+'</td>').join('')+'</tr>':'')+'</tbody></table>';
+  el.querySelectorAll('th.s').forEach(th=>th.onclick=()=>{const i=+th.dataset.i;el._sort={i,d:el._sort&&el._sort.i===i?-el._sort.d:-1};render()})}
+const bar=(v,t)=>'<span class="barc"><span class="'+cls(v,t)+'" style="min-width:48px;text-align:right">'+fp(v)+'</span><span class="bar"><i style="width:'+(v||0)+'%"></i></span></span>';
+const pv=(v,t)=>'<span class="'+cls(v,t)+'">'+fp(v)+'</span>';
+const mis=n=>n?'<b class="bad">'+n+'</b>':'<span class="mut">0</span>';
+function aggS(a){const base=CONFIG.NOSHOW_AS_MISS?a.length:a.filter(r=>r.cin).length,ot=a.filter(r=>r.ota).length,ff=a.filter(r=>r.otf).length;
+  return{n:a.length,land:a.filter(r=>r.moda==='LAND').length,sea:a.filter(r=>r.moda==='SEA').length,ota:pct(ot,base),otf:pct(ff,base),otaMis:base-ot,otfMis:base-ff,ns:a.filter(r=>!r.cin).length}}
+function aggD(a){const ot=a.filter(r=>r.state==='ontime').length;return{n:a.length,ot,late:a.filter(r=>r.state==='late').length,na:a.filter(r=>r.state==='notarrived').length,otd:pct(ot,a.length)}}
+
+/* ---------- main render ---------- */
+function render(){
+  const today=$('fDate').value?parseDT($('fDate').value).d:day0(new Date());const h1=addD(today,-1),h2=addD(today,-2);
+  $('strip').innerHTML='<div class="stop otd"><div class="dot">H-2</div><b>'+fDL(h2)+'</b><span>Target tiba, diukur OTD</span></div>'+
+   '<div class="stop stf"><div class="dot">H-1</div><b>'+fDL(h1)+'</b><span>Req Stuffing, diukur OTA & Fulfillment</span></div>'+
+   '<div class="stop now"><div class="dot">H</div><b>'+fDL(today)+'</b><span>Tanggal tarikan laporan</span></div>';
+
+  /* 1. Stuffing */
+  const S=STF.filter(r=>r.key===ymd(h1)&&pass(r)),tS=aggS(S);
+  $('s1lead').textContent='Stuffing '+fD(h1)+': OTA '+fp(tS.ota)+', Fulfillment '+fp(tS.otf);
+  $('s1sub').textContent=tS.n+' SI ('+tS.land+' darat, '+tS.sea+' laut), '+tS.otaMis+' OTA MIS, '+tS.otfMis+' Fulfill MIS'+(tS.ns?', '+tS.ns+' SI belum check-in':'')+'. Target OTA '+CONFIG.TARGET.ota+'%, Fulfillment '+CONFIG.TARGET.otf+'%.';
+  const siteRows=[...group(S,r=>r.site)].map(([k,a])=>({k,...aggS(a)})).sort((a,b)=>{const ia=CONFIG.SITE_ORDER.indexOf(a.k),ib=CONFIG.SITE_ORDER.indexOf(b.k);return(ia<0?99:ia)-(ib<0?99:ib)});
+  tbl('s1site',[{h:'Origin site',l:1,f:r=>esc(r.k),t:()=>'Total'},{h:'Darat',f:r=>r.land,t:t=>t.land},{h:'Laut',f:r=>r.sea,t:t=>t.sea},{h:'Jumlah SI',f:r=>'<b>'+r.n+'</b>',t:t=>t.n},
+    {h:'OTA',f:r=>bar(r.ota,CONFIG.TARGET.ota),t:t=>bar(t.ota,CONFIG.TARGET.ota)},{h:'Fulfillment',f:r=>bar(r.otf,CONFIG.TARGET.otf),t:t=>bar(t.otf,CONFIG.TARGET.otf)},
+    {h:'OTA MIS',f:r=>mis(r.otaMis),t:t=>mis(t.otaMis)},{h:'Fulfill MIS',f:r=>mis(r.otfMis),t:t=>mis(t.otfMis)}],siteRows,{total:tS,empty:'Tidak ada stuffing pada '+fDL(h1)+'.'});
+  const bRows=[...group(S,r=>r.batch)].map(([k,a])=>({k,...aggS(a)})).sort((a,b)=>a.k.localeCompare(b.k,undefined,{numeric:true}));
+  tbl('s1batch',[{h:'Batch',l:1,f:r=>esc(r.k)},{h:'SI',f:r=>r.n},{h:'OTA',f:r=>pv(r.ota,CONFIG.TARGET.ota)},{h:'Fulfillment',f:r=>pv(r.otf,CONFIG.TARGET.otf)},{h:'OTA MIS',f:r=>mis(r.otaMis)}],bRows);
+  const ex1=S.filter(r=>!r.ota).sort((a,b)=>(b.cin?b.lateH:1e6)-(a.cin?a.lateH:1e6));
+  tbl('s1exc',[{h:'No SI',l:1,f:r=>esc(r.si)},{h:'Vendor',l:1,f:r=>esc(r.vendor)},{h:'Site',l:1,f:r=>esc(r.site)},{h:'Tujuan',l:1,f:r=>esc(r.tujuan)},{h:'Batch',f:r=>esc(r.batch)},
+    {h:'Req',f:r=>fDT(r.req)},{h:'Check-in',f:r=>r.cin?fDT(r.cin):'<b class="bad">Belum</b>'},{h:'Telat',f:r=>r.cin&&r.lateH>0?r.lateH.toFixed(1).replace('.',',')+' jam':'–'},
+    {h:'Status',f:r=>!r.cin?'<span class="pill bad bad">Tidak datang</span>':!r.otf?'<span class="pill bad bad">Fulfill MIS</span>':'<span class="pill warn warn">OTA MIS</span>'}],ex1,{empty:'Semua SI H-1 tiba sesuai batch.'});
+  $('s1note').textContent='Sumber: '+CONFIG.SOURCE_NAME+'. OTA & Fulfillment memakai kolom SLA OTA dan SLA FULFILL. OTA: jam check-in ≤ jam Req Stuffing. Fulfillment: tanggal check-in ≤ tanggal Req Stuffing. '+(CONFIG.NOSHOW_AS_MISS?'SI tanpa check-in dihitung MIS. ':'')+'Moda '+CONFIG.MODAS.join(' & ')+' saja. Origin Sidoarjo dipisah HCI dan AHI berdasarkan BU.';
+
+  /* 2. OTD */
+  const D=OTD.filter(r=>r.key===ymd(h2)&&pass(r)),tD=aggD(D);
+  $('s2lead').textContent='Kedatangan target '+fD(h2)+': '+tD.ot+' dari '+tD.n+' SI tiba sesuai target ('+fp(tD.otd)+')';
+  $('s2kpi').innerHTML=[[tD.n,'Target tiba',''],[tD.ot,'Tiba sesuai target','ok'],[tD.late,'Tiba terlambat',tD.late?'warn':'mut'],[tD.na,'Belum tiba (Miss SLA)',tD.na?'bad':'mut']].map(([v,l,c])=>'<div class="kpi"><div class="v '+c+'">'+v+'</div><div class="l">'+l+'</div></div>').join('');
+  const dRows=[...group(D,r=>r.tujuan)].map(([k,a])=>({k,moda:[...new Set(a.map(x=>x.moda==='SEA'?'Laut':'Darat'))].join(', '),...aggD(a)}));
+  if(!$('s2dest')._sort)dRows.sort((a,b)=>(b.na-a.na)||(b.late-a.late)||(b.n-a.n));
+  tbl('s2dest',[{h:'Tujuan',l:1,f:r=>esc(r.k),v:r=>r.k,t:()=>'Total'},{h:'Moda',f:r=>r.moda},{h:'Target',f:r=>r.n,v:r=>r.n,t:t=>t.n},{h:'Sesuai',f:r=>r.ot,v:r=>r.ot,t:t=>t.ot},
+    {h:'Telat',f:r=>r.late?'<b class="warn">'+r.late+'</b>':'<span class="mut">0</span>',v:r=>r.late,t:t=>t.late},{h:'Belum',f:r=>mis(r.na),v:r=>r.na,t:t=>mis(t.na)},{h:'OTD',f:r=>pv(r.otd,CONFIG.TARGET.otd),v:r=>r.otd,t:t=>pv(t.otd,CONFIG.TARGET.otd)}],dRows,{total:tD,empty:'Tidak ada SI dengan target tiba '+fDL(h2)+'.'});
+  drawMap(dRows);
+  const ex2=D.filter(r=>r.state!=='ontime').sort((a,b)=>(a.state==='notarrived'?0:1)-(b.state==='notarrived'?0:1)||(b.lateD||0)-(a.lateD||0));
+  tbl('s2exc',[{h:'No SI',l:1,f:r=>esc(r.si)},{h:'Vendor',l:1,f:r=>esc(r.vendor)},{h:'Moda',f:r=>r.moda==='SEA'?'Laut':'Darat'},{h:'Origin',l:1,f:r=>esc(r.site)},{h:'Tujuan',l:1,f:r=>esc(r.tujuan)},
+    {h:'Checkout DC',f:r=>fDT(r.cout)},{h:'Target',f:r=>fDT(r.sla)},{h:'Tiba',f:r=>r.arr?fDT(r.arr):'<b class="bad">Belum</b>'},{h:'Telat',f:r=>r.state==='late'?(r.lateD||'?')+' hari':dDiff(today,r.sla.d)+' hari*'},{h:'Posisi',l:1,f:r=>esc(r.pos||r.status||'–')}],ex2,{empty:'Semua SI dengan target '+fD(h2)+' tiba tepat waktu.'});
+  $('s2note').textContent='OTD = tanggal tiba aktual (Actual SLA) ≤ Target SLA. SI yang belum Delivered pada tanggal tarikan otomatis Miss SLA; * = jumlah hari lewat target sampai hari ini.';
+
+  /* 2b. Sea position */
+  const asof=$('fDate').value===ymd(new Date())?new Date():addD(today,1);
+  const L=OTD.filter(r=>r.moda==='SEA'&&!r.delivered&&r.cout&&day0(r.cout.d)<=today&&pass(r)).map(r=>{
+    let st,age=null,cat;const p=r.pos.toLowerCase();
+    st=/sail/.test(p)?'sail':/(pod|yard|discharge|dooring|bongkar)/.test(p)?'pod':/(poo|origin|stack|muat)/.test(p)?'poo':r.ata?'pod':r.atd?'sail':'poo';
+    if(st==='pod'){age=r.agY!=null?r.agY:(r.ata?dDiff(today,r.ata.d):null);cat=age==null?'ok':age>CONFIG.SEA.YARD_MAX?'bad':'ok'}
+    else if(st==='sail'){if(r.eta){const x=dDiff(r.eta.d,today);age=-x;cat=x>0?'ok':x===0?'warn':'bad'}else cat='none'}
+    else{age=r.agP!=null?r.agP:dDiff(today,r.cout.d);cat=age>CONFIG.SEA.POO_MAX?'bad':'ok'}
+    return{...r,st,age,cat}});
+  const c=(s,k)=>L.filter(r=>r.st===s&&r.cat===k).length,n=s=>L.filter(r=>r.st===s).length;
+  const poo={n:n('poo'),ok:c('poo','ok'),bad:c('poo','bad')},sail={n:n('sail'),ok:c('sail','ok'),warn:c('sail','warn'),bad:c('sail','bad'),none:c('sail','none')},pod={n:n('pod'),ok:c('pod','ok'),bad:c('pod','bad')};
+  const totBad=poo.bad+sail.bad+pod.bad;
+  $('s2bLead').textContent='Posisi moda laut: '+totBad+' SI terlambat atau delay dari '+L.length+' SI dalam perjalanan';
+  $('s2bSub').textContent='SI laut belum Delivered, posisi per '+asof.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})+($('fDate').value===ymd(new Date())?', '+asof.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})+' WIB':'');
+  const sw=k=>'<span class="sw" style="background:var(--'+k+')"></span>';
+  const card=(t,o,rows)=>'<div class="card"><h4>'+t+'</h4><div class="big">'+o+' <small>SI</small></div>'+rows.map(([k,l,v])=>'<div class="row"><span>'+sw(k)+l+'</span><b class="'+(k==='ok'?'':k)+'">'+v+'</b></div>').join('')+'</div>';
+  $('s2bStage').innerHTML=card('Port of Origin (POO)',poo.n,[['ok','Normal (≤ '+CONFIG.SEA.POO_MAX+' hari)',poo.ok],['bad','Terlambat (> '+CONFIG.SEA.POO_MAX+' hari)',poo.bad]])+
+    card('On Sailing',sail.n,[['ok','Sesuai jadwal (sebelum ETA)',sail.ok],['warn','Potensi delay (ETA hari ini)',sail.warn],['bad','Delay (lewat ETA)',sail.bad]].concat(sail.none?[['muted','ETA belum diisi',sail.none]]:[]))+
+    card('Port of Discharge (Yard)',pod.n,[['ok','Normal (≤ '+CONFIG.SEA.YARD_MAX+' hari)',pod.ok],['bad','Delay (> '+CONFIG.SEA.YARD_MAX+' hari)',pod.bad]]);
+  const fx=[];if(pod.bad)fx.push('Port of Discharge: '+pod.bad+' dari '+pod.n+' SI sudah lebih dari '+CONFIG.SEA.YARD_MAX+' hari di yard.');
+  if(sail.bad||sail.warn)fx.push('On Sailing: '+sail.bad+' SI sudah lewat ETA, '+sail.warn+' SI ETA hari ini.');
+  if(poo.bad)fx.push('Port of Origin: '+poo.bad+' SI tertahan lebih dari '+CONFIG.SEA.POO_MAX+' hari sebelum berangkat.');
+  $('s2bFind').innerHTML=fx.map(t=>'<li>'+esc(t)+'</li>').join('');
+  const stName={poo:'POO',sail:'On Sailing',pod:'Yard POD'};
+  const ex3=L.filter(r=>r.cat==='bad').sort((a,b)=>(b.age||0)-(a.age||0)).slice(0,100);
+  tbl('s2bExc',[{h:'No SI',l:1,f:r=>esc(r.si)},{h:'Vendor',l:1,f:r=>esc(r.vendor)},{h:'Pelayaran',l:1,f:r=>esc(r.pel||'–')},{h:'Tujuan',l:1,f:r=>esc(r.tujuan)},{h:'Posisi',f:r=>stName[r.st]},
+    {h:'Checkout DC',f:r=>fDT(r.cout)},{h:'ATD',f:r=>fDT(r.atd)},{h:'ETA',f:r=>fDT(r.eta)},{h:'ATA',f:r=>fDT(r.ata)},{h:'Aging / lewat ETA',f:r=>'<b class="bad">'+r.age+' hari</b>'}],ex3,{empty:'Tidak ada SI laut yang terlambat.'});
+
+  /* 3. Vendor */
+  const W=CONFIG.WEIGHT;
+  function vend(moda){const V=new Map(),get=v=>{if(!V.has(v))V.set(v,{v,s:[],d:[]});return V.get(v)};
+    S.filter(r=>r.moda===moda).forEach(r=>get(r.vendor).s.push(r));D.filter(r=>r.moda===moda).forEach(r=>get(r.vendor).d.push(r));
+    const rows=[...V.values()].map(x=>{const a=aggS(x.s),b=aggD(x.d),ota=x.s.length?a.ota:null,otf=x.s.length?a.otf:null,otd=x.d.length?b.otd:null;
+      let sw=0,sc=0;[['otf',otf],['ota',ota],['otd',otd]].forEach(([k,v])=>{if(v!=null){sw+=W[k];sc+=v*W[k]}});const score=sw?sc/sw:null;
+      return{v:x.v,n:x.s.length,ota,otf,otd,dn:x.d.length,miss:a.otaMis+b.late+b.na,score,g:grade(score)}});
+    const sa=aggS(S.filter(r=>r.moda===moda)),sd=aggD(D.filter(r=>r.moda===moda));
+    return{rows,tot:{n:sa.n,ota:sa.n?sa.ota:null,otf:sa.n?sa.otf:null,otd:sd.n?sd.otd:null,dn:sd.n}}}
+  const vcols=[{h:'Vendor',l:1,f:r=>'<b>'+esc(r.v)+'</b>',v:r=>r.v,t:()=>'Total'},{h:'Volume H-1',f:r=>r.n||'<span class="mut">0</span>',v:r=>r.n,t:t=>t.n},
+    {h:'OTA',f:r=>pv(r.ota,CONFIG.TARGET.ota),v:r=>r.ota,t:t=>pv(t.ota,CONFIG.TARGET.ota)},{h:'Fulfillment',f:r=>pv(r.otf,CONFIG.TARGET.otf),v:r=>r.otf,t:t=>pv(t.otf,CONFIG.TARGET.otf)},
+    {h:'OTD (SI dinilai)',f:r=>r.otd==null?'<span class="mut">–</span>':pv(r.otd,CONFIG.TARGET.otd)+' <span class="mut">('+r.dn+')</span>',v:r=>r.otd,t:t=>t.otd==null?'–':pv(t.otd,CONFIG.TARGET.otd)+' <span class="mut">('+t.dn+')</span>'},
+    {h:'Skor',f:r=>r.score==null?'–':r.score.toFixed(1).replace('.',','),v:r=>r.score},{h:'Grade',f:r=>r.g?'<span class="grade g'+r.g+'">'+r.g+'</span>':'–',v:r=>r.score}];
+  const VL=vend('LAND'),VS=vend('SEA');
+  [['L',VL,'Darat','s3land'],['S',VS,'Laut','s3sea']].forEach(([k,V,lbl,id])=>{
+    if(!$(id)._sort)V.rows.sort((a,b)=>b.n-a.n||b.dn-a.dn||a.v.localeCompare(b.v));
+    $('s3lead'+k).textContent='Vendor '+lbl+': OTA '+fp(V.tot.ota)+', Fulfillment '+fp(V.tot.otf)+', OTD '+fp(V.tot.otd);
+    const low=V.rows.filter(r=>r.g&&'DE'.includes(r.g)).length;
+    $('s3sub'+k).textContent=V.rows.length+' vendor. OTA & Fulfillment dari stuffing '+fD(h1)+', OTD dari target tiba '+fD(h2)+'. '+(low?low+' vendor grade D/E.':'Tidak ada vendor grade D/E.')+' Klik judul kolom untuk mengurutkan.';
+    tbl(id,vcols,V.rows,{total:V.tot,empty:'Tidak ada vendor '+lbl.toLowerCase()+' aktif.'})});
+  $('s3note').textContent='Skor = rata-rata tertimbang Fulfillment '+W.otf+'%, OTA '+W.ota+'%, OTD '+W.otd+'%; bila vendor hanya punya sebagian metrik, bobot dinormalisasi. Grade A 95–100, B 90–94, C 80–89, D 75–79, E ≤74. Skor harian bersifat indikatif karena volume per vendor kecil; evaluasi formal tetap memakai akumulasi periode.';
+
+  LAST={today,h1,h2,tS,siteRows,tD,dRows,poo,sail,pod,totBad,L:L.length,VL,VS};
+}
+
+function drawMap(rows){
+  if(!window.L){$('map').innerHTML='<div class="empty">Peta tidak dapat dimuat. Data per tujuan tetap tersedia di tabel.</div>';return}
+  if(!map){map=L.map('map',{zoomSnap:.25,scrollWheelZoom:false,attributionControl:true}).setView([-2.5,118],4.75);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap, © CARTO',subdomains:'abcd',maxZoom:12}).addTo(map)}
+  if(mapLayer)mapLayer.remove();mapLayer=L.layerGroup().addTo(map);const miss=[];
+  rows.forEach(r=>{const c=COORD[nrm(r.k)];if(!c){miss.push(r.k);return}
+    const col=r.na?'#C0392B':r.late?'#D49A13':'#1F8A5B',sz=Math.max(22,Math.min(46,16+Math.sqrt(r.n)*7));
+    L.marker(c,{icon:L.divIcon({className:'',html:'<div class="mk" style="width:'+sz+'px;height:'+sz+'px;background:'+col+'">'+r.n+'</div>',iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]}),zIndexOffset:r.na?1000:r.late?500:0})
+     .bindTooltip('<b>'+esc(r.k)+'</b><br>Target '+r.n+', sesuai '+r.ot+', telat '+r.late+', belum '+r.na,{direction:'top'}).addTo(mapLayer)});
+  setTimeout(()=>map.invalidateSize(),50);
+  if(miss.length)$('s2note').textContent+=' Tujuan tanpa koordinat peta (tetap tampil di tabel): '+miss.join(', ')+'.';
+}
+
+function copySummary(){const X=LAST;if(!X.today)return;
+  const sites=X.siteRows.filter(r=>r.otaMis||r.otfMis).map(r=>'- '+r.k+': OTA '+fp(r.ota)+', Fulfill '+fp(r.otf)+' ('+r.otaMis+' OTA MIS, '+r.otfMis+' Fulfill MIS)');
+  const dest=X.dRows.filter(r=>r.na||r.late).map(r=>'- '+r.k+': '+(r.na?r.na+' belum tiba':'')+(r.na&&r.late?', ':'')+(r.late?r.late+' telat':''));
+  const vl=V=>V.rows.filter(r=>r.g&&'CDE'.includes(r.g)).sort((a,b)=>a.score-b.score).slice(0,5).map(r=>'- '+r.v+' (grade '+r.g+'): OTA '+fp(r.ota)+', Fulfill '+fp(r.otf)+', OTD '+fp(r.otd));
+  const txt=['*Laporan Harian Armada External*','Tarikan '+fDL(X.today)+($('fSite').value?' | Origin '+$('fSite').value:''),'',
+    '*1. Stuffing '+fD(X.h1)+'*: OTA '+fp(X.tS.ota)+', Fulfillment '+fp(X.tS.otf),X.tS.n+' SI ('+X.tS.land+' darat, '+X.tS.sea+' laut), '+X.tS.otaMis+' OTA MIS, '+X.tS.otfMis+' Fulfill MIS',...sites,'',
+    '*2. Target tiba '+fD(X.h2)+'*: '+X.tD.ot+' dari '+X.tD.n+' SI sesuai target ('+fp(X.tD.otd)+')','Terlambat '+X.tD.late+', belum tiba '+X.tD.na,...dest,'',
+    '*Posisi laut*: '+X.totBad+' SI terlambat/delay dari '+X.L,'- POO > '+CONFIG.SEA.POO_MAX+' hari: '+X.poo.bad,'- Lewat ETA: '+X.sail.bad+' (ETA hari ini '+X.sail.warn+')','- Yard > '+CONFIG.SEA.YARD_MAX+' hari: '+X.pod.bad,'',
+    '*3. Vendor*','Darat: OTA '+fp(X.VL.tot.ota)+', Fulfill '+fp(X.VL.tot.otf)+', OTD '+fp(X.VL.tot.otd),...vl(X.VL),'Laut: OTA '+fp(X.VS.tot.ota)+', Fulfill '+fp(X.VS.tot.otf)+', OTD '+fp(X.VS.tot.otd),...vl(X.VS)].join('\n');
+  navigator.clipboard.writeText(txt).then(()=>toast('Ringkasan disalin, siap ditempel ke WhatsApp atau email'),()=>toast('Browser menolak akses clipboard'))}
+async function testFilter(){
+  if(!loadedFrom){toast('Data saat ini sudah data penuh, tidak perlu diuji');return}
+  const b=$('btnTest');b.disabled=true;b.textContent='Menguji…';
+  try{const full=await fetchFirst(CONFIG.SOURCE_URLS,CONFIG.SOURCE_NAME);const fS=buildStuffing(full),fO=buildOTD(full);
+    const from=ymd(loadedFrom),to=ymd(anchorDate());
+    const cnt=(a,k)=>{const m={};a.forEach(r=>{const x=r[k];if(x>=from&&x<=to)m[x]=(m[x]||0)+1});return m};
+    const cmp=(A,B,lbl)=>{const keys=[...new Set([...Object.keys(A),...Object.keys(B)])].sort();return keys.filter(k=>(A[k]||0)!==(B[k]||0)).map(k=>lbl+' '+k+': filter '+(A[k]||0)+' vs penuh '+(B[k]||0))};
+    const seaOpen=a=>a.filter(r=>r.moda==='SEA'&&!r.delivered).length;
+    const diff=[...cmp(cnt(STF,'key'),cnt(fS,'key'),'Stuffing'),...cmp(cnt(OTD,'key'),cnt(fO,'key'),'Target tiba')];
+    if(seaOpen(OTD)!==seaOpen(fO))diff.push('SI laut belum Delivered: filter '+seaOpen(OTD)+' vs penuh '+seaOpen(fO));
+    const msg=diff.length?'<span class="e">Uji akurasi: '+diff.length+' selisih ditemukan, laporan dialihkan ke data penuh. '+esc(diff.slice(0,5).join('; '))+(diff.length>5?' …':'')+'</span>'
+      :'<span class="ok">Uji akurasi lulus: jumlah SI per tanggal '+fD(loadedFrom)+'–'+fD(anchorDate())+' dan SI laut berjalan identik dengan data penuh.</span>';
+    if(diff.length){STF=fS;OTD=fO;loadMode='data penuh (hasil uji)';loadedFrom=null;render()}
+    $('status').innerHTML+='<br>'+msg;
+  }catch(e){$('status').innerHTML+='<br><span class="e">Uji gagal: '+esc(e.message)+'</span>'}
+  finally{b.disabled=false;b.textContent='Uji akurasi filter'}}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
+
+if(typeof document!=='undefined'&&$('fDate')){
+  $('fDate').value=ymd(new Date());
+  $('fSite').addEventListener('change',render);
+  $('fDate').addEventListener('change',()=>{const need=addD(anchorDate(),-CONFIG.WINDOW_DAYS-3);if(loadedFrom&&need<loadedFrom)load();else render()});
+  $('btnTest').onclick=testFilter;
+  $('btnRefresh').onclick=load;$('btnPrint').onclick=()=>window.print();$('btnCopy').onclick=copySummary;
+  load();
+}
+</script>
+</body>
+</html>
