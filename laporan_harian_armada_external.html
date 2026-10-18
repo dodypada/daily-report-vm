@@ -90,6 +90,13 @@ tr.tot td{font-weight:700;border-top:2px solid var(--ink);background:var(--panel
 .empty{padding:18px;color:var(--muted);text-align:center}
 .toast{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:6px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:1}
+.health{margin:14px 0 0;padding:14px 16px;border-radius:8px;border:1px solid var(--bad);background:var(--bad-soft);color:var(--ink);font-size:14px}
+.health.soft{border-color:var(--warn);background:var(--warn-soft)}
+.health b{display:block;font-size:16px;margin-bottom:4px}
+.health ul{margin:6px 0 8px 18px;padding:0}
+.health button{margin-top:4px;font-size:13px}
+body.suspect section{display:none}
+button:disabled{opacity:.45;cursor:not-allowed}
 @media (max-width:900px){.grid2,.grid-map{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.stage{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.toast{transition:none}}
 @media print{.controls,.status,.toast{display:none}body{background:#fff}section{break-inside:avoid;border-color:#ccc}.tbl.scroll{max-height:none}}
@@ -113,6 +120,7 @@ tr.tot td{font-weight:700;border-top:2px solid var(--ink);background:var(--panel
   </header>
   <div class="strip" id="strip"></div>
   <p class="status" id="status">Memuat data dari Google Sheets…</p>
+  <div id="health" role="alert" hidden></div>
 
   <section>
     <div class="sec-no">1. Stuffing H-1</div>
@@ -171,6 +179,7 @@ const CONFIG = {
   SOURCE_NAME: 'Data Dashboard Daily VM (sheet Data)',
   // Ambil hanya 60 hari terakhir (filter dibaca di server Google, read-only). SI yang belum Delivered selalu ikut.
   WINDOW_DAYS: 60,
+  MIN_ROWS_WINDOW: 3000,                        // batas wajar baris untuk 60 hari; di bawah ini dianggap data tidak lengkap
   QUERY_BASE: 'https://docs.google.com/spreadsheets/d/1UNF0G-hmBW9lLVA8UhYiDfnvlLJABqEsfpMUN43hWvQ/gviz/tq?tqx=out:csv&sheet=Data&headers=1',
   COL: { REQ: 'I', MODA: 'H', POS: 'R' },       // huruf kolom di sheet: Req Stuffing, Moda, Position
   MODAS: ['LAND','SEA'],                        // LCL tidak dihitung
@@ -255,7 +264,7 @@ const validRows=rows=>rows.length>1&&rows[0].some(h=>nrm(h)==='no si')&&rows[0].
 async function fetchWindow(from){
   for(const u of queryUrls(from)){try{const r=await fetch(u+'&cb='+Date.now());if(!r.ok)continue;const rows=parseCSV(await r.text());if(validRows(rows))return{rows,mode:'60 hari'}}catch(e){}}
   const rows=await fetchFirst(CONFIG.SOURCE_URLS,CONFIG.SOURCE_NAME);return{rows,mode:'data penuh (filter 60 hari tidak bisa dipakai)'}}
-async function load(){$('status').textContent='Memuat data dari Google Sheets…';srcMsg=[];
+async function load(){$('status').textContent='Memuat data dari Google Sheets…';srcMsg=[];healthOverride=false;
   const from=addD(anchorDate(),-CONFIG.WINDOW_DAYS);
   try{const res=await fetchWindow(from);STF=buildStuffing(res.rows);OTD=buildOTD(res.rows);loadMode=res.mode;loadedFrom=res.mode==='60 hari'?from:null}
   catch(e){STF=[];OTD=[];srcMsg.push(e.message)}
@@ -282,8 +291,31 @@ function aggS(a){const base=CONFIG.NOSHOW_AS_MISS?a.length:a.filter(r=>r.cin).le
 function aggD(a){const ot=a.filter(r=>r.state==='ontime').length;return{n:a.length,ot,late:a.filter(r=>r.state==='late').length,na:a.filter(r=>r.state==='notarrived').length,otd:pct(ot,a.length)}}
 
 /* ---------- main render ---------- */
+let healthOverride=false;
+function checkHealth(h1key){
+  const hard=[],soft=[];
+  if(!STF.length&&!OTD.length){hard.push('Tidak ada baris data yang terbaca dari sheet.');return{hard,soft}}
+  const pos={};OTD.forEach(r=>{const k=r.pos||'(kosong)';pos[k]=(pos[k]||0)+1});const keys=Object.keys(pos);
+  const deliv=OTD.filter(r=>r.delivered).length;
+  if(OTD.length>50&&keys.length<=1)hard.push('Semua '+OTD.length+' baris berstatus sama ("'+keys[0]+'"). Sheet kemungkinan sedang difilter.');
+  else if(OTD.length>50&&deliv===0)hard.push('Tidak ada satu pun SI berstatus Delivered. Sheet kemungkinan sedang difilter.');
+  if(loadedFrom&&OTD.length<CONFIG.MIN_ROWS_WINDOW)hard.push('Hanya '+OTD.length.toLocaleString('id-ID')+' baris untuk '+CONFIG.WINDOW_DAYS+' hari; normalnya di atas '+CONFIG.MIN_ROWS_WINDOW.toLocaleString('id-ID')+'.');
+  if(!STF.some(r=>r.key===h1key))soft.push('Tidak ada stuffing pada tanggal H-1. Pastikan apakah hari libur, data belum diinput, atau sheet sedang difilter.');
+  return{hard,soft}}
+function showHealth(H){const el=$('health');
+  const suspect=H.hard.length>0&&!healthOverride;
+  document.body.classList.toggle('suspect',suspect);$('btnCopy').disabled=H.hard.length>0;$('btnTest').disabled=H.hard.length>0;
+  if(!H.hard.length&&!H.soft.length){el.hidden=true;return}
+  el.hidden=false;el.className='health'+(H.hard.length?'':' soft');
+  el.innerHTML=H.hard.length
+    ?'<b>Data tidak lengkap, angka laporan '+(healthOverride?'ditampilkan atas permintaan (jangan dikirim)':'disembunyikan')+'</b><ul>'+H.hard.concat(H.soft).map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>'+
+      'Langkah: minta pemilik sheet melepas filter (Data → Remove filter) atau memakai Filter view, lalu klik Muat ulang data.<br>'+
+      (healthOverride?'':'<button id="btnOverride">Tampilkan angka tetap (hanya untuk pengecekan)</button>')
+    :'<b>Perlu dicek</b><ul>'+H.soft.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>';
+  const b=$('btnOverride');if(b)b.onclick=()=>{healthOverride=true;render()}}
 function render(){
   const today=$('fDate').value?parseDT($('fDate').value).d:day0(new Date());const h1=addD(today,-1),h2=addD(today,-2);
+  showHealth(checkHealth(ymd(h1)));
   $('strip').innerHTML='<div class="stop otd"><div class="dot">H-2</div><b>'+fDL(h2)+'</b><span>Target tiba, diukur OTD</span></div>'+
    '<div class="stop stf"><div class="dot">H-1</div><b>'+fDL(h1)+'</b><span>Req Stuffing, diukur OTA & Fulfillment</span></div>'+
    '<div class="stop now"><div class="dot">H</div><b>'+fDL(today)+'</b><span>Tanggal tarikan laporan</span></div>';
@@ -374,7 +406,10 @@ function render(){
 function drawMap(rows){
   if(!window.L){$('map').innerHTML='<div class="empty">Peta tidak dapat dimuat. Data per tujuan tetap tersedia di tabel.</div>';return}
   if(!map){map=L.map('map',{zoomSnap:.25,scrollWheelZoom:false,attributionControl:true}).setView([-2.5,118],4.75);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap, © CARTO',subdomains:'abcd',maxZoom:12}).addTo(map)}
+    // Peta dasar tanpa API key: Esri Light Gray, cadangan OpenStreetMap bila gagal
+    const esri=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',{attribution:'Tiles © Esri',maxZoom:12});
+    let fails=0;esri.on('tileerror',()=>{if(++fails===4){map.removeLayer(esri);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:12}).addTo(map)}});
+    esri.addTo(map)}
   if(mapLayer)mapLayer.remove();mapLayer=L.layerGroup().addTo(map);const miss=[];
   rows.forEach(r=>{const c=COORD[nrm(r.k)];if(!c){miss.push(r.k);return}
     const col=r.na?'#C0392B':r.late?'#D49A13':'#1F8A5B',sz=Math.max(22,Math.min(46,16+Math.sqrt(r.n)*7));
@@ -384,7 +419,7 @@ function drawMap(rows){
   if(miss.length)$('s2note').textContent+=' Tujuan tanpa koordinat peta (tetap tampil di tabel): '+miss.join(', ')+'.';
 }
 
-function copySummary(){const X=LAST;if(!X.today)return;
+function copySummary(){const X=LAST;if(!X.today||$('btnCopy').disabled)return;
   const sites=X.siteRows.filter(r=>r.otaMis||r.otfMis).map(r=>'- '+r.k+': OTA '+fp(r.ota)+', Fulfill '+fp(r.otf)+' ('+r.otaMis+' OTA MIS, '+r.otfMis+' Fulfill MIS)');
   const dest=X.dRows.filter(r=>r.na||r.late).map(r=>'- '+r.k+': '+(r.na?r.na+' belum tiba':'')+(r.na&&r.late?', ':'')+(r.late?r.late+' telat':''));
   const vl=V=>V.rows.filter(r=>r.g&&'CDE'.includes(r.g)).sort((a,b)=>a.score-b.score).slice(0,5).map(r=>'- '+r.v+' (grade '+r.g+'): OTA '+fp(r.ota)+', Fulfill '+fp(r.otf)+', OTD '+fp(r.otd));
@@ -398,6 +433,7 @@ async function testFilter(){
   if(!loadedFrom){toast('Data saat ini sudah data penuh, tidak perlu diuji');return}
   const b=$('btnTest');b.disabled=true;b.textContent='Menguji…';
   try{const full=await fetchFirst(CONFIG.SOURCE_URLS,CONFIG.SOURCE_NAME);const fS=buildStuffing(full),fO=buildOTD(full);
+    if(fO.length>50&&!fO.some(r=>r.delivered))throw new Error('data penuh juga tidak berisi SI Delivered, sheet masih terfilter');
     const from=ymd(loadedFrom),to=ymd(anchorDate());
     const cnt=(a,k)=>{const m={};a.forEach(r=>{const x=r[k];if(x>=from&&x<=to)m[x]=(m[x]||0)+1});return m};
     const cmp=(A,B,lbl)=>{const keys=[...new Set([...Object.keys(A),...Object.keys(B)])].sort();return keys.filter(k=>(A[k]||0)!==(B[k]||0)).map(k=>lbl+' '+k+': filter '+(A[k]||0)+' vs penuh '+(B[k]||0))};
